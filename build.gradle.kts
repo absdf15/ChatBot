@@ -13,6 +13,7 @@ repositories {
 }
 val ktorVersion = "2.2.4"
 dependencies {
+    implementation("org.jetbrains.kotlin:kotlin-reflect")
     // mirai
     implementation(platform("net.mamoe:mirai-bom:2.14.0"))
     implementation("net.mamoe:mirai-console-compiler-common")

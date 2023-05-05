@@ -5,20 +5,30 @@ import com.hankcs.hanlp.dictionary.stopword.CoreStopWordDictionary
 import com.hankcs.hanlp.seg.common.Term
 import com.hankcs.hanlp.tokenizer.StandardTokenizer
 import io.github.absdf15.chatbot.ChatBot
+import io.github.absdf15.chatbot.annotation.Command
 import io.github.absdf15.chatbot.module.Permission
+import io.github.absdf15.chatbot.module.common.ActionParams
 import io.github.absdf15.chatbot.module.common.Constants
+import io.github.absdf15.chatbot.module.common.MatchType
 import io.github.absdf15.chatbot.utils.PermissionUtils.Companion.getPermission
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import net.mamoe.mirai.console.command.CommandContext
-import net.mamoe.mirai.contact.Contact
-import net.mamoe.mirai.contact.Member
 import net.mamoe.mirai.event.events.MessageEvent
 import net.mamoe.mirai.message.data.At
 import net.mamoe.mirai.message.data.AtAll
 import net.mamoe.mirai.message.data.MessageChain
 import net.mamoe.mirai.message.data.QuoteReply
 import java.util.regex.Pattern
+import kotlin.reflect.KClass
+import kotlin.reflect.KFunction
+import kotlin.reflect.full.callSuspend
+import kotlin.reflect.full.memberExtensionFunctions
 
 class TextUtils {
+
+
     companion object {
 
 
@@ -36,6 +46,9 @@ class TextUtils {
             }
         }
 
+        /**
+         * 判断是是否有关键词
+         */
         fun String.filter(): Boolean? {
             if (Constants.SENSI_WORDS.isEmpty()) return null
             return Constants.SEARCH_APP.ContainsAny(this)
@@ -84,7 +97,7 @@ class TextUtils {
             val keyList = listOf(" ", ".", "。")
             var hasWord = false
             val filteredWords = words.filterNot {
-                var result = false
+                val result: Boolean
                 if (keyList.contains(it.word)) {
                     if (!hasWord) hasWord = false
                     result = !hasWord
@@ -101,82 +114,86 @@ class TextUtils {
             return output
         }
 
-        suspend fun Contact.executeSubCommand(
-            inputCommand: String,
-            subCommand: String,
-            permission: Permission? = Permission.MEMBER,
-            groupCode: Long? = null,
-            action: suspend () -> Unit
-        ): Boolean {
-            if (inputCommand == subCommand) {
-                if (permission != null) {
-                    val code = groupCode ?: if (this is Member) group.id else null
-                    val userPermission = getPermission(code)
-                    ChatBot.logger.info("当前方法:$subCommand 用户权限:$userPermission 所需权限:$permission 是否有拥有执行权限: ${userPermission.hasPermission(permission)}")
-                    if (userPermission.hasPermission(permission))
-                        with(this) {
-                            action()
-                            return true
-                        }
-                } else {
-                    ChatBot.logger.info("当前方法:$subCommand 用户权限:${getPermission()} 所需权限:${Permission.VISITOR} 是否有拥有执行权限: ${getPermission().hasPermission(Permission.VISITOR)}")
-                    with(this) {
-                        action()
-                        return true
+
+        private fun Permission.permissionLog(command: String, permission: Permission) {
+            ChatBot.logger.info(
+                "当前方法:$command 用户权限:$this 所需权限:$permission 是否有拥有执行权限: ${
+                    this.hasPermission(
+                        permission
+                    )
+                }"
+            )
+        }
+
+
+        /**
+         * 解析并执行子指令
+         */
+        suspend fun MessageEvent.executeCommandFunction(
+            vararg classes: KClass<*>
+        ) {
+            val rawCommand: String = getUnformattedCommand(message)
+            val commands = rawCommand.split("\\s+".toRegex(), limit = 2)
+            var isRootCommand = false
+            var sendText: String? = null
+            for (clazz in classes) {
+                clazz.annotations.filterIsInstance<Command>().forEach { annotation ->
+                    if (commands[0].match(annotation.value, annotation.matchType)) {
+                        ChatBot
+                        isRootCommand = true
+                        sendText = annotation.sendText
+                        return@forEach
                     }
                 }
+                if (isRootCommand) break
             }
-            return false
-        }
 
-
-        /**
-         * 获取原始数据
-         */
-        fun getUnformattedCommand(message: MessageChain): String {
-            return if (message.size > 2) {
-                buildString {
-                    val dropNumber = if (message[1] is QuoteReply) 2 else 1
-                    //drop跳过第一个，dropLast跳过最后一个
-                    message.drop(dropNumber).dropLast(1).forEach { it ->
-                        val content = if (it is At && it !is AtAll) it.contentToString()
-                            .substringAfter("@") else it.contentToString()
-                        append("$content ")
-                    }
-                    val last = message.last()
-                    if (last is At && last !is AtAll) append(last.contentToString().substringAfter("@"))
-                    else append(last.contentToString())
-                }
-            } else message.getOrNull(1)?.contentToString() ?: ""
-        }
-
-        /**
-         * 解析并执行指令
-         */
-        suspend fun MessageEvent.parseCommandAndExecute(
-            sendText: String?,
-            isRootCommand: Boolean = false,
-            action: suspend Contact.(String, List<String>, String) -> Unit
-        ): Boolean {
-            val unformattedCommand: String = getUnformattedCommand(message)
-            val commands = unformattedCommand.split("\\s+".toRegex(), limit = 2)
-            if (unformattedCommand.isEmpty() || ((commands.size < 2 || commands[1].isEmpty()) && !isRootCommand)
-            ) {
+            if ((commands.size < 2 || commands[1].isEmpty()) && isRootCommand) {
                 if (sendText?.isNotEmpty() == true)
-                    subject.sendMessage(sendText)
-                return false
+                    subject.sendMessage(sendText ?: "")
+                return
             }
-            val (command, args) = if (isRootCommand) unformattedCommand.parseCommand()
-            else commands[1].parseCommand()
 
-            this.sender.action(command, args, unformattedCommand)
-            return true
+            val (command, args) = if (isRootCommand) commands[1].parseCommand() else rawCommand.parseCommand()
+            for (clazz in classes) {
+                clazz.memberExtensionFunctions.forEach { function ->
+                    processCommandAnnotation(function, command, args, rawCommand, clazz)
+                }
+
+            }
         }
 
+        private suspend fun MessageEvent.processCommandAnnotation(
+            function: KFunction<*>,
+            command: String,
+            args: List<String>,
+            rawData: String,
+            clazz: KClass<*>
+        ) {
+            function.annotations.filterIsInstance<Command>().forEach { annotation ->
+                if (command.match(annotation.value, annotation.matchType)) {
+                    val actionParams = ActionParams(
+                        command, args, rawData, this.sender,
+                        sender.getPermission(subject.id), this
+                    )
+                    if(actionParams.permission.hasPermission(annotation.permission).not()){
+                        ChatBot.logger.info("该用户没有权限！")
+                        actionParams.permission.permissionLog(command,annotation.permission)
+                        return
+                    }
+                    ChatBot.logger.info("匹配成功！")
+                    if (function.isSuspend) {
+                        CoroutineScope(Dispatchers.Default).launch {
+                            function.callSuspend(clazz.objectInstance,actionParams)
+                        }
+                    }
+                }
+            }
+        }
 
-        fun String?.notEmpty(): Boolean = this?.isNotEmpty() == true
-
-
+        /**
+         * 不知道干啥用的方法
+         */
         fun StringBuilder.appendIfNotEmpty(prefix: String, value: String?, newLine: Boolean = true) {
             value?.takeIf { it.isNotEmpty() }?.let {
                 if (newLine) {
@@ -187,7 +204,11 @@ class TextUtils {
             }
         }
 
-        fun String.parseCommand(): Pair<String, List<String>> {
+        /**
+         * 解析参数列表
+         * @return 返回 Command指令和后续参数列表
+         */
+        private fun String.parseCommand(): Pair<String, List<String>> {
             val tokens = this.split("\\s+".toRegex())
             val command = tokens.first()
             val arguments = mutableListOf<String>()
@@ -197,7 +218,7 @@ class TextUtils {
                 if (token.startsWith("{")) {
                     val argument = extractArgument(tokens, i, "{", "}")
                     if (argument == null) {
-                        return command to emptyList<String>() // ERROR
+                        return command to emptyList() // ERROR
                     } else {
                         arguments.add("{$argument}")
                         i += argument.split("\\s+".toRegex()).size
@@ -216,6 +237,28 @@ class TextUtils {
                 }
             }
             return Pair(command, arguments)
+        }
+
+        /**
+         * 解析消息来源的 [MessageChain]，并拼接合成字符串
+         *
+         * @return 拼接后的字符串
+         */
+        fun getUnformattedCommand(message: MessageChain): String {
+            return if (message.size > 2) {
+                buildString {
+                    val dropNumber = if (message[1] is QuoteReply) 2 else 1
+                    //drop跳过第一个，dropLast跳过最后一个
+                    message.drop(dropNumber).dropLast(1).forEach { it ->
+                        val content = if (it is At && it !is AtAll) it.contentToString()
+                            .substringAfter("@") else it.contentToString()
+                        append("$content ")
+                    }
+                    val last = message.last()
+                    if (last is At && last !is AtAll) append(last.contentToString().substringAfter("@"))
+                    else append(last.contentToString())
+                }
+            } else message.getOrNull(1)?.contentToString() ?: ""
         }
 
         private fun extractArgument(tokens: List<String>, startIndex: Int, opening: String, closing: String): String? {
@@ -238,16 +281,24 @@ class TextUtils {
             return argument.removePrefix(opening).replace("\\{", "{").replace("\\}", "}")
         }
 
-        private fun unescape(c: Char): Char {
-            return when (c) {
-                'n' -> '\n'
-                'r' -> '\r'
-                't' -> '\t'
-                '\\' -> '\\'
-                else -> throw IllegalArgumentException("Invalid escape character: $c")
+
+        /**
+         * 使用指定的匹配方式对给定的字符串进行匹配
+         *
+         * @param target 用于匹配的字段
+         * @param matchType 匹配方式
+         *
+         * @return 如果匹配成功则返回true，否则返回false
+         */
+        fun String.match(target: String, matchType: MatchType): Boolean {
+            return when (matchType) {
+                MatchType.EXACT_MATCH -> this == target
+                MatchType.PARTIAL_MATCH -> this.contains(target)
+                MatchType.REGEX_MATCH -> Regex(target).matches(this)
             }
         }
 
-
     }
 }
+
+

@@ -20,7 +20,7 @@ class PermissionUtils {
                         val group = bot.getGroup(it)
                         if (group?.owner?.id == id) return Permission.GROUP_OWNER
                         if (group?.get(id)?.permission?.level == 1) return Permission.GROUP_ADMIN
-                        if (group?.get(id)?.permission?.level == 1) return Permission.MEMBER
+                        if (group?.get(id)?.permission?.level == 0) return Permission.MEMBER
                     }
                 }
             }

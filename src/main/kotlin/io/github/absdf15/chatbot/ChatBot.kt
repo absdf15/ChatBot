@@ -1,15 +1,12 @@
 package io.github.absdf15.chatbot
 
-import com.vladsch.flexmark.ast.Code
-import io.github.absdf15.chatbot.ChatBot.reload
 import io.github.absdf15.chatbot.config.*
 import io.github.absdf15.chatbot.config.ApiConfig
 import io.github.absdf15.chatbot.config.ChatConfig
 import io.github.absdf15.chatbot.config.ChatSettings
 import io.github.absdf15.chatbot.config.WebScreenshotConfig
 import io.github.absdf15.chatbot.handle.ChatMessageHandler
-import io.github.absdf15.chatbot.handle.MenuHandler
-import io.github.absdf15.chatbot.handle.PermissionHandler
+import io.github.absdf15.chatbot.handle.MessageRegistry
 import io.github.absdf15.chatbot.module.chat.ChatPromptData
 import io.github.absdf15.chatbot.module.common.Constants
 import io.github.absdf15.chatbot.utils.HttpUtils
@@ -20,6 +17,7 @@ import net.mamoe.mirai.console.plugin.jvm.JvmPluginDescription
 import net.mamoe.mirai.console.plugin.jvm.KotlinPlugin
 import net.mamoe.mirai.console.util.ConsoleInput
 import net.mamoe.mirai.event.GlobalEventChannel
+import net.mamoe.mirai.event.events.GroupMessageEvent
 import net.mamoe.mirai.event.registerTo
 import net.mamoe.mirai.utils.info
 
@@ -38,9 +36,8 @@ object ChatBot : KotlinPlugin(
         loadCoreConfig()
         loadChatSettings()
         loadFilter()
-        MenuHandler.registerTo(GlobalEventChannel)
-        ChatMessageHandler.registerTo(GlobalEventChannel)
-        PermissionHandler.registerTo(GlobalEventChannel)
+        MessageRegistry.registerTo(GlobalEventChannel)
+        ChatMessageHandler.registerTo(GlobalEventChannel.filterIsInstance<GroupMessageEvent>())
 
     }
 

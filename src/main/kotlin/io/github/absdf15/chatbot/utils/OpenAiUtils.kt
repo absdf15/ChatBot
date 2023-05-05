@@ -6,10 +6,13 @@ import io.github.absdf15.chatbot.ChatBot
 import io.github.absdf15.chatbot.config.ChatConfig
 import io.github.absdf15.chatbot.config.ChatSettings
 import io.github.absdf15.chatbot.module.common.Constants
+import io.github.absdf15.chatbot.module.common.Constants.Companion.fetchApiResult
 import io.github.absdf15.chatbot.module.common.Constants.Companion.getCurrentModel
 import io.github.absdf15.chatbot.module.common.Constants.Companion.getPrompt
 import io.github.absdf15.chatbot.utils.MessageUtils.Companion.safeSendAndRecallAsync
 import io.github.absdf15.chatbot.utils.MessageUtils.Companion.safeSendMessage
+import io.github.absdf15.chatbot.utils.OpenAiUtils.Companion.filter
+import io.github.absdf15.chatbot.utils.TextUtils.Companion.filter
 import io.github.absdf15.openai.exception.OpenAIException
 import io.github.absdf15.openai.module.ChatMessage
 import io.github.absdf15.openai.module.OpenAIModel
@@ -18,12 +21,38 @@ import io.github.absdf15.openai.module.chat.ChatCompletion
 import io.github.absdf15.openai.module.chat.ChatInfo
 import io.github.absdf15.openai.module.search.Call
 import io.ktor.client.network.sockets.*
+import kotlinx.coroutines.sync.withLock
 import net.mamoe.mirai.contact.User
 import net.mamoe.mirai.contact.nameCardOrNick
+import net.mamoe.mirai.event.events.GroupMessageEvent
+import net.mamoe.mirai.event.events.MessageEvent
 
 
 class OpenAiUtils {
     companion object {
+
+        /**
+         * 查询或聊天
+         */
+        suspend fun MessageEvent.queryOrChat(text: String, action: suspend MessageEvent.() -> Unit) {
+            val isFilter = text.filter()
+            ChatBot.logger.info("isFilter:$isFilter")
+            if (isFilter == true) {
+                sender.filter(text).takeIf { it }?.let {
+                    sender.safeSendMessage("该内容不合规，请重新编辑后输出！")
+                    return
+                }
+            }
+            sender.fetchApiResult {
+                if (this is GroupMessageEvent && ChatSettings.hasSessionShared[subject.id] == true) {
+                    Constants.USER_MUTEX.withLock(subject.id) {
+                        action.invoke(this)
+                    }
+                } else {
+                    action.invoke(this)
+                }
+            }
+        }
 
         /**
          * 根据消息文本判断是否需要过滤
@@ -67,7 +96,10 @@ class OpenAiUtils {
          */
         fun initPrompt(sessionId: Long): Int {
             val promptName =  Constants.safeGetPrompt(sessionId)
-            if (promptName == "NONE") return 1
+            if (promptName == "NONE") {
+                Constants.CHAT_MESSAGES[sessionId] = arrayListOf()
+                return 1
+            }
             val prompt = Constants.PROMPT_FILES[promptName] ?: return -1
             if (Constants.CHAT_MESSAGES[sessionId]?.isNotEmpty() == true) return 0
             val messages = arrayListOf(ChatMessage(Role.SYSTEM, prompt))
