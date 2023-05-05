@@ -25,7 +25,7 @@ object ChatBot : KotlinPlugin(
     JvmPluginDescription(
         id = "io.github.absdf15.chatbot",
         name = "ChatBot",
-        version = "1.0",
+        version = "1.1",
     ) {
         author("absdf15")
         dependsOn("xyz.cssxsh.mirai.plugin.mirai-selenium-plugin", true)
