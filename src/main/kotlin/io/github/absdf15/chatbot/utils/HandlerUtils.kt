@@ -21,6 +21,7 @@ import kotlin.reflect.KFunction
 import kotlin.reflect.full.callSuspend
 import kotlin.reflect.full.memberExtensionFunctions
 import kotlin.reflect.full.memberFunctions
+import kotlin.reflect.jvm.jvmName
 
 class HandlerUtils {
     companion object {
@@ -36,7 +37,7 @@ class HandlerUtils {
 
 
         /**
-         * 解析并执行子指令
+         * 解析并执行指令
          */
         suspend fun MessageEvent.executeCommandFunction(
             vararg classes: KClass<*>
@@ -68,13 +69,15 @@ class HandlerUtils {
                 }
 
                 val (command, args) = if (isRootCommand) commands[1].parseCommand() else rawCommand.parseCommand()
-                for (clazz in classes) {
-                    CommandConfig.command.forEach { (fullName, commandData) ->
-                        if (command.match(commandData.context, commandData.matchType)) {
-                            val result = processCommandAliasAnnotation(fullName, command, args, rawCommand)
-                            if (result) return true
-                        }
+                CommandConfig.command.forEach { (fullName, commandData) ->
+                    // ChatBot.logger.info("$command,${commandData.context}, ${commandData.matchType}")
+                    if (command.match(commandData.context, commandData.matchType)) {
+//                        ChatBot.logger.info("别名匹配成功！")
+                        val result = processCommandAliasAnnotation(fullName, command, args, rawCommand)
+                        if (result) return true
                     }
+                }
+                for (clazz in classes) {
                     clazz.memberExtensionFunctions.forEach { function ->
                         val result = processCommandAnnotation(function, command, args, rawCommand, clazz)
                         if (result) return true
@@ -91,6 +94,9 @@ class HandlerUtils {
             return false
         }
 
+        /**
+         * 解析 Command 注解并调用方法执行
+         */
         private suspend fun MessageEvent.processCommandAnnotation(
             function: KFunction<*>,
             command: String,
@@ -99,17 +105,25 @@ class HandlerUtils {
             clazz: KClass<*>
         ): Boolean {
             function.annotations.filterIsInstance<Command>().forEach { annotation ->
-                if (command.match(annotation.value, annotation.matchType)) {
+                val fullName = "${clazz.jvmName}.${function.name}"
+                if (
+                    (CommandConfig.command[fullName] == null ||
+                            CommandConfig.command[fullName]?.context == annotation.value)
+                    && command.match(annotation.value, annotation.matchType)
+                ) {
                     val actionParams = ActionParams(
                         command, args, rawData, this.sender,
                         sender.getPermission(subject.id), this
                     )
-                    actionParams.processCommand(this, annotation, function, clazz)
+                    return actionParams.processCommand(this, annotation, function, clazz)
                 }
             }
             return false
         }
 
+        /**
+         * 解析 Command 别名并调用方法执行
+         */
         private suspend fun MessageEvent.processCommandAliasAnnotation(
             fullMethodName: String,
             command: String,
@@ -123,14 +137,16 @@ class HandlerUtils {
             // 获取 KClass 实例
             val clazz = Class.forName(className).kotlin
             // 找到需要的方法
-            val function = clazz.memberFunctions.firstOrNull { it.name == methodName }
-
+            val function = clazz.memberExtensionFunctions.firstOrNull {
+                it.name == methodName
+            }
+            //ChatBot.logger.info("$clazz:$function")
             function?.annotations?.filterIsInstance<Command>()?.forEach { annotation ->
                 val actionParams = ActionParams(
                     command, args, rawData, this.sender,
                     sender.getPermission(subject.id), this
                 )
-                actionParams.processCommand(this, annotation, function, clazz)
+                return actionParams.processCommand(this, annotation, function, clazz)
             }
             return false
         }
@@ -147,11 +163,11 @@ class HandlerUtils {
                 permission.permissionLog(command, annotation.permission)
                 return false
             }
-            ChatBot.logger.info("匹配成功！")
+//            ChatBot.logger.info("匹配成功！")
             ChatBot.logger.info("该方法名为:${function.name}")
             if (function.isSuspend) {
                 CoroutineScope(Dispatchers.Default).launch {
-                    function.callSuspend(clazz.objectInstance, this)
+                    function.callSuspend(clazz.objectInstance, this@processCommand)
                     function.annotations.forEach {
                         if (it is PointsTo) {
                             Constants.POINT_MAP[PointPair(messageEvent.sender.id, messageEvent.subject.id)] =
