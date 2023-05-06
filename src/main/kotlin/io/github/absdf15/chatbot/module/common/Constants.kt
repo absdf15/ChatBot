@@ -2,8 +2,12 @@ package io.github.absdf15.chatbot.module.common
 
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import io.github.absdf15.chatbot.command.ChatCommand
+import io.github.absdf15.chatbot.command.MenuCommand
+import io.github.absdf15.chatbot.command.PermissionCommand
 import io.github.absdf15.chatbot.config.ChatConfig
 import io.github.absdf15.chatbot.config.ChatSettings
+import io.github.absdf15.chatbot.module.PointPair
 import io.github.absdf15.chatbot.module.chat.PromptChatSettings
 import io.github.absdf15.chatbot.module.chat.TempInfo
 import io.github.absdf15.chatbot.utils.MessageUtils.Companion.safeSendMessage
@@ -21,6 +25,7 @@ import net.mamoe.mirai.contact.Member
 import net.mamoe.mirai.contact.User
 import net.mamoe.mirai.message.data.At
 import toolgood.words.StringSearch
+import kotlin.reflect.KClass
 
 class Constants {
     companion object {
@@ -41,10 +46,21 @@ class Constants {
         )
 
 
+        val REGISTRY_CLASSES = arrayOf<KClass<*>>(
+            ChatCommand::class,
+            MenuCommand::class,
+            PermissionCommand::class
+        )
+
         /**
          * 待审核数据集 TODO
          */
         val TEMP_DATA: MutableList<TempInfo> = mutableListOf()
+
+        /**
+         *
+         */
+        val POINT_MAP: MutableMap<PointPair, String> = mutableMapOf()
 
         /**
          * 聊天会话缓存
@@ -142,7 +158,8 @@ class Constants {
         }
 
         fun User.getCurrentModel(): OpenAIModel {
-            return if (this is Member && ChatSettings.hasSessionShared[group.id] == true) CHAT_MODEL[group.id] ?:DEFAULT_MODEL
+            return if (this is Member && ChatSettings.hasSessionShared[group.id] == true) CHAT_MODEL[group.id]
+                ?: DEFAULT_MODEL
             else CHAT_MODEL[id] ?: DEFAULT_MODEL
         }
 

@@ -1,4 +1,4 @@
-package io.github.absdf15.chatbot.module.common
+package io.github.absdf15.chatbot.module
 
 import io.github.absdf15.chatbot.module.Permission
 import net.mamoe.mirai.contact.Contact

@@ -4,7 +4,7 @@ import io.github.absdf15.chatbot.ChatBot.save
 import io.github.absdf15.chatbot.annotation.Command
 import io.github.absdf15.chatbot.config.CoreConfig
 import io.github.absdf15.chatbot.module.Permission
-import io.github.absdf15.chatbot.module.common.ActionParams
+import io.github.absdf15.chatbot.module.ActionParams
 import io.github.absdf15.chatbot.module.common.MatchType
 import io.github.absdf15.chatbot.utils.MessageUtils.Companion.safeSendMessage
 import net.mamoe.mirai.event.events.GroupMessageEvent

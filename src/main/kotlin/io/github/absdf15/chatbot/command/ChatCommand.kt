@@ -6,7 +6,7 @@ import io.github.absdf15.chatbot.ChatBot
 import io.github.absdf15.chatbot.annotation.Command
 import io.github.absdf15.chatbot.config.ApiConfig
 import io.github.absdf15.chatbot.config.ChatSettings
-import io.github.absdf15.chatbot.module.common.ActionParams
+import io.github.absdf15.chatbot.module.ActionParams
 import io.github.absdf15.chatbot.module.common.Constants
 import io.github.absdf15.chatbot.module.common.Constants.Companion.getCurrentModel
 import io.github.absdf15.chatbot.module.common.MatchType
@@ -19,10 +19,8 @@ import io.github.absdf15.chatbot.utils.MessageUtils.Companion.safeSendMessage
 import io.github.absdf15.chatbot.utils.OpenAiUtils.Companion.generateCallApi
 import io.github.absdf15.chatbot.utils.OpenAiUtils.Companion.queryOrChat
 import io.github.absdf15.chatbot.utils.OpenAiUtils.Companion.replyText
-import io.github.absdf15.chatbot.utils.TextUtils
 import io.github.absdf15.openai.module.OpenAIModel
 import io.github.absdf15.openai.module.search.Api
-import net.mamoe.mirai.event.events.MessageEvent
 import net.mamoe.mirai.message.data.ForwardMessageBuilder
 import net.mamoe.mirai.message.data.toPlainText
 import net.mamoe.mirai.utils.ExternalResource.Companion.uploadAsImage

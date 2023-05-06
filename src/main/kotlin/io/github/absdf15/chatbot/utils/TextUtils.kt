@@ -7,7 +7,7 @@ import com.hankcs.hanlp.tokenizer.StandardTokenizer
 import io.github.absdf15.chatbot.ChatBot
 import io.github.absdf15.chatbot.annotation.Command
 import io.github.absdf15.chatbot.module.Permission
-import io.github.absdf15.chatbot.module.common.ActionParams
+import io.github.absdf15.chatbot.module.ActionParams
 import io.github.absdf15.chatbot.module.common.Constants
 import io.github.absdf15.chatbot.module.common.MatchType
 import io.github.absdf15.chatbot.utils.PermissionUtils.Companion.getPermission
@@ -115,81 +115,6 @@ class TextUtils {
         }
 
 
-        private fun Permission.permissionLog(command: String, permission: Permission) {
-            ChatBot.logger.info(
-                "当前方法:$command 用户权限:$this 所需权限:$permission 是否有拥有执行权限: ${
-                    this.hasPermission(
-                        permission
-                    )
-                }"
-            )
-        }
-
-
-        /**
-         * 解析并执行子指令
-         */
-        suspend fun MessageEvent.executeCommandFunction(
-            vararg classes: KClass<*>
-        ) {
-            val rawCommand: String = getUnformattedCommand(message)
-            val commands = rawCommand.split("\\s+".toRegex(), limit = 2)
-            var isRootCommand = false
-            var sendText: String? = null
-            for (clazz in classes) {
-                clazz.annotations.filterIsInstance<Command>().forEach { annotation ->
-                    if (commands[0].match(annotation.value, annotation.matchType)) {
-                        ChatBot
-                        isRootCommand = true
-                        sendText = annotation.sendText
-                        return@forEach
-                    }
-                }
-                if (isRootCommand) break
-            }
-
-            if ((commands.size < 2 || commands[1].isEmpty()) && isRootCommand) {
-                if (sendText?.isNotEmpty() == true)
-                    subject.sendMessage(sendText ?: "")
-                return
-            }
-
-            val (command, args) = if (isRootCommand) commands[1].parseCommand() else rawCommand.parseCommand()
-            for (clazz in classes) {
-                clazz.memberExtensionFunctions.forEach { function ->
-                    processCommandAnnotation(function, command, args, rawCommand, clazz)
-                }
-
-            }
-        }
-
-        private suspend fun MessageEvent.processCommandAnnotation(
-            function: KFunction<*>,
-            command: String,
-            args: List<String>,
-            rawData: String,
-            clazz: KClass<*>
-        ) {
-            function.annotations.filterIsInstance<Command>().forEach { annotation ->
-                if (command.match(annotation.value, annotation.matchType)) {
-                    val actionParams = ActionParams(
-                        command, args, rawData, this.sender,
-                        sender.getPermission(subject.id), this
-                    )
-                    if(actionParams.permission.hasPermission(annotation.permission).not()){
-                        ChatBot.logger.info("该用户没有权限！")
-                        actionParams.permission.permissionLog(command,annotation.permission)
-                        return
-                    }
-                    ChatBot.logger.info("匹配成功！")
-                    if (function.isSuspend) {
-                        CoroutineScope(Dispatchers.Default).launch {
-                            function.callSuspend(clazz.objectInstance,actionParams)
-                        }
-                    }
-                }
-            }
-        }
 
         /**
          * 不知道干啥用的方法
@@ -208,7 +133,7 @@ class TextUtils {
          * 解析参数列表
          * @return 返回 Command指令和后续参数列表
          */
-        private fun String.parseCommand(): Pair<String, List<String>> {
+        fun String.parseCommand(): Pair<String, List<String>> {
             val tokens = this.split("\\s+".toRegex())
             val command = tokens.first()
             val arguments = mutableListOf<String>()

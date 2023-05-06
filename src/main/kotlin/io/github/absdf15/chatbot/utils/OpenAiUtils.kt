@@ -53,6 +53,18 @@ class OpenAiUtils {
                 }
             }
         }
+        /**
+         * 聊天
+         */
+        suspend fun MessageEvent.chat(text: String) {
+            val sessionId = if (ChatSettings.hasSessionShared[subject.id] == true) subject.id else sender.id
+            val result = initPrompt(sessionId)
+            ChatBot.logger.info("初始化结果：$result")
+            if (result >= 0) {
+                ChatBot.logger.info("进入If语句：result >= 0")
+                sender.chatHandle(text, sessionId)
+            }
+        }
 
         /**
          * 根据消息文本判断是否需要过滤
