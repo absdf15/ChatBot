@@ -4,8 +4,9 @@
 > 
 > QQ群(零号线): 765751115
 
-相关项目:  
+相关项目（前置项目）:  
 * [Mirai Selenium Plugin](https://github.com/cssxsh/mirai-selenium-plugin) 前置插件，用于生成图片（还未正式使用）
+* [QBotCore](https://github.com/absdf15/QBotCore)
 
 参考项目:
 1. [EX-ChatGPT](https://github.com/circlestarzero/EX-chatGPT)
