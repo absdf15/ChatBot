@@ -158,7 +158,7 @@ class Constants {
 
         fun safeGetPrompt(id: Long): String {
             val prompt = getPrompt(id)
-            return prompt ?: "NONE"
+            return prompt ?: ChatSettings.defaultPrompt
         }
 
         fun setPrompt(id: Long, value: String): Boolean {

@@ -82,12 +82,12 @@ object ChatBot : QBotPlugin(
         ApiConfig.reload()
         WebScreenshotConfig.reload()
         ChatPromptData.reload()
-        logger.info("加载完成...")
         if (Constants.PROMPT_FILES.isEmpty())
             runBlocking {
                 HttpUtils.initPrompts()
             }
         ChatPromptData.reload()
         loadChatConfig()
+        logger.info("加载完成...")
     }
 }
