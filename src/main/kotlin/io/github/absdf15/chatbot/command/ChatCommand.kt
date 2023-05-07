@@ -3,34 +3,36 @@ package io.github.absdf15.chatbot.command
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import io.github.absdf15.chatbot.ChatBot
-import io.github.absdf15.chatbot.annotation.Command
 import io.github.absdf15.chatbot.config.ApiConfig
 import io.github.absdf15.chatbot.config.ChatSettings
-import io.github.absdf15.chatbot.module.ActionParams
 import io.github.absdf15.chatbot.module.common.Constants
 import io.github.absdf15.chatbot.module.common.Constants.Companion.getCurrentModel
-import io.github.absdf15.chatbot.module.common.MatchType
 import io.github.absdf15.chatbot.utils.HttpUtils
 import io.github.absdf15.chatbot.utils.MarkdownUtils
 import io.github.absdf15.chatbot.utils.MarkdownUtils.Companion.convertMarkdownToImg
-import io.github.absdf15.chatbot.utils.MessageUtils.Companion.safeGetCode
-import io.github.absdf15.chatbot.utils.MessageUtils.Companion.safeSendAndRecallAsync
-import io.github.absdf15.chatbot.utils.MessageUtils.Companion.safeSendMessage
 import io.github.absdf15.chatbot.utils.OpenAiUtils.Companion.generateCallApi
 import io.github.absdf15.chatbot.utils.OpenAiUtils.Companion.queryOrChat
 import io.github.absdf15.chatbot.utils.OpenAiUtils.Companion.replyText
 import io.github.absdf15.openai.module.OpenAIModel
 import io.github.absdf15.openai.module.search.Api
+import io.github.absdf15.qbot.core.annotation.Command
+import io.github.absdf15.qbot.core.annotation.Component
+import io.github.absdf15.qbot.core.module.common.ActionParams
+import io.github.absdf15.qbot.core.module.common.MatchType
+import io.github.absdf15.qbot.core.utils.MessageUtils.Companion.safeGetCode
+import io.github.absdf15.qbot.core.utils.MessageUtils.Companion.safeSendAndRecallAsync
+import io.github.absdf15.qbot.core.utils.MessageUtils.Companion.safeSendMessage
 import net.mamoe.mirai.message.data.ForwardMessageBuilder
 import net.mamoe.mirai.message.data.toPlainText
 import net.mamoe.mirai.utils.ExternalResource.Companion.uploadAsImage
 
-object ChatCommand {
+@Component
+public object ChatCommand {
 
     /**
      * 根据API回调结果回复
      */
-    @Command("^(\\/q|question|问)",MatchType.REGEX_MATCH)
+    @Command("^(\\/q|question|问)", MatchType.REGEX_MATCH)
     suspend fun ActionParams.query() {
         val text = rawCommand.split(" ", limit = 2)[1]
         messageEvent.queryOrChat(text) {

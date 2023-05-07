@@ -1,11 +1,11 @@
 package io.github.absdf15.chatbot.handle
 
-import io.github.absdf15.chatbot.module.Permission
-import io.github.absdf15.chatbot.module.common.Constants.Companion.REGISTRY_CLASSES
-import io.github.absdf15.chatbot.utils.HandlerUtils.Companion.executeCommandFunction
+
 import io.github.absdf15.chatbot.utils.OpenAiUtils.Companion.chat
 import io.github.absdf15.chatbot.utils.OpenAiUtils.Companion.queryOrChat
-import io.github.absdf15.chatbot.utils.PermissionUtils.Companion.getPermission
+import io.github.absdf15.qbot.core.module.common.Permission
+import io.github.absdf15.qbot.core.utils.PermissionUtils.Companion.getPermission
+import io.github.absdf15.qbot.core.utils.PermissionUtils.Companion.hasPermission
 import net.mamoe.mirai.event.EventHandler
 import net.mamoe.mirai.event.SimpleListenerHost
 import net.mamoe.mirai.event.events.GroupMessageEvent
@@ -16,16 +16,15 @@ import net.mamoe.mirai.message.data.QuoteReply
 /**
  * 消息事件注册类
  */
-internal object MessageRegistry : SimpleListenerHost() {
+internal object MessageHandler : SimpleListenerHost() {
     @EventHandler
     suspend fun MessageEvent.handle() {
-        val result = executeCommandFunction(
-            *REGISTRY_CLASSES
-        )
-        if (!result && this is GroupMessageEvent){
+        if (this is GroupMessageEvent &&
+            sender.hasPermission(Permission.MEMBER)) {
             handler()
         }
     }
+
 
     /**
      * ChatGPT 默认处理方法
@@ -42,7 +41,7 @@ internal object MessageRegistry : SimpleListenerHost() {
             }
         }
         if (isExecute) {
-            queryOrChat(text){
+            queryOrChat(text) {
                 chat(text)
             }
         }

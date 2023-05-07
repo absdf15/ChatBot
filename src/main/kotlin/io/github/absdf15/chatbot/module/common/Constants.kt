@@ -5,15 +5,15 @@ import com.google.gson.GsonBuilder
 import io.github.absdf15.chatbot.command.ChatCommand
 import io.github.absdf15.chatbot.command.MenuCommand
 import io.github.absdf15.chatbot.command.PermissionCommand
+import io.github.absdf15.chatbot.config.ApiConfig
 import io.github.absdf15.chatbot.config.ChatConfig
 import io.github.absdf15.chatbot.config.ChatSettings
-import io.github.absdf15.chatbot.module.PointPair
 import io.github.absdf15.chatbot.module.chat.PromptChatSettings
 import io.github.absdf15.chatbot.module.chat.TempInfo
-import io.github.absdf15.chatbot.utils.MessageUtils.Companion.safeSendMessage
 import io.github.absdf15.openai.OpenAI
 import io.github.absdf15.openai.module.ChatMessage
 import io.github.absdf15.openai.module.OpenAIModel
+import io.github.absdf15.qbot.core.utils.MessageUtils.Companion.safeSendMessage
 import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
 import io.ktor.client.plugins.*
@@ -45,23 +45,10 @@ class Constants {
             "https://raw.githubusercontent.com/absdf15/promot/main/suffix/suffix-英语翻译.txt",
         )
 
-
-        val REGISTRY_CLASSES = arrayOf<KClass<*>>(
-            ChatCommand::class,
-            MenuCommand::class,
-            PermissionCommand::class
-        )
-
         /**
          * 待审核数据集 TODO
          */
         val TEMP_DATA: MutableList<TempInfo> = mutableListOf()
-
-        /**
-         *
-         */
-        val POINT_MAP: MutableMap<PointPair, String> = mutableMapOf()
-
         /**
          * 聊天会话缓存
          */

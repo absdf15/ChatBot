@@ -1,12 +1,13 @@
 package io.github.absdf15.chatbot
 
-import io.github.absdf15.chatbot.annotation.Command
+
 import io.github.absdf15.chatbot.config.*
-import io.github.absdf15.chatbot.handle.MessageRegistry
-import io.github.absdf15.chatbot.module.CommandData
+import io.github.absdf15.chatbot.handle.MessageHandler
 import io.github.absdf15.chatbot.module.chat.ChatPromptData
 import io.github.absdf15.chatbot.module.common.Constants
 import io.github.absdf15.chatbot.utils.HttpUtils
+import io.github.absdf15.qbot.core.module.QBotPlugin
+import io.github.absdf15.qbot.core.module.common.QBotData
 import kotlinx.coroutines.runBlocking
 import net.mamoe.mirai.console.data.Value
 import net.mamoe.mirai.console.data.findBackingFieldValue
@@ -17,45 +18,26 @@ import net.mamoe.mirai.event.GlobalEventChannel
 import net.mamoe.mirai.event.events.MessageEvent
 import net.mamoe.mirai.event.registerTo
 import net.mamoe.mirai.utils.info
-import xyz.cssxsh.mirai.selenium.MiraiSeleniumPlugin.save
-import kotlin.reflect.full.memberExtensionFunctions
-import kotlin.reflect.jvm.javaMethod
-import kotlin.reflect.jvm.jvmName
 
-object ChatBot : KotlinPlugin(
-    JvmPluginDescription(
-        id = "io.github.absdf15.chatbot",
-        name = "ChatBot",
-        version = "1.1.1",
-    ) {
-        author("absdf15")
-        dependsOn("xyz.cssxsh.mirai.plugin.mirai-selenium-plugin", true)
-    }
+object ChatBot : QBotPlugin(
+    QBotData(
+        JvmPluginDescription(
+            id = "io.github.absdf15.chatbot",
+            name = "ChatBot",
+            version = "1.1.1",
+        ) {
+            author("absdf15")
+            dependsOn("xyz.cssxsh.mirai.plugin.mirai-selenium-plugin", true)
+            dependsOn("io.github.absdf15.qbot.core","0.1.0",false)
+        },
+        commandPath = "io.github.absdf15.chatbot.command",
+        classes = arrayListOf(MessageHandler::class)
+    )
 ) {
     override fun onEnable() {
         logger.info { "ChatBot-Plugin loaded." }
-        loadCommandConfig()
-        loadCoreConfig()
         loadChatSettings()
         loadFilter()
-        MessageRegistry.registerTo(GlobalEventChannel.filterIsInstance<MessageEvent>())
-    }
-
-    private fun loadCommandConfig() {
-        CommandConfig.reload()
-        Constants.REGISTRY_CLASSES.forEach { clazz ->
-            clazz.memberExtensionFunctions.forEach { function ->
-                function.annotations.filterIsInstance<Command>().forEach { command ->
-                    val commandData = CommandData(context = command.value, matchType = command.matchType)
-                    val functionName = "${clazz.jvmName}.${function.name}"
-                    ExampleCommand.command[functionName] = commandData
-                    if (CommandConfig.command.containsKey(functionName).not())
-                        CommandConfig.command[functionName] = commandData
-                }
-            }
-        }
-        CommandConfig.save()
-        ExampleCommand.save()
     }
 
     private fun loadFilter() {
@@ -82,20 +64,6 @@ object ChatBot : KotlinPlugin(
         }
     }
 
-    private fun loadCoreConfig() {
-        CoreConfig.reload()
-        if (CoreConfig.botOwners.isEmpty()) {
-            runBlocking {
-                var code: Long? = null
-                while (code == null) {
-                    code = ConsoleInput.requestInput("请输入你（机器人主人）的QQ号码:").trim().toLongOrNull()
-                }
-                CoreConfig.botOwners.add(code)
-            }
-            CoreConfig.save()
-        }
-    }
-
     private fun loadChatConfig() {
         ChatConfig.reload()
         if (ChatConfig.apiKey.isEmpty()) {
@@ -109,10 +77,12 @@ object ChatBot : KotlinPlugin(
     }
 
     private fun loadChatSettings() {
+        logger.info("开始加载...")
         ChatSettings.reload()
         ApiConfig.reload()
         WebScreenshotConfig.reload()
         ChatPromptData.reload()
+        logger.info("加载完成...")
         if (Constants.PROMPT_FILES.isEmpty())
             runBlocking {
                 HttpUtils.initPrompts()

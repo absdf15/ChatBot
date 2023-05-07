@@ -1,16 +1,18 @@
 package io.github.absdf15.chatbot.command
 
-import io.github.absdf15.chatbot.annotation.Command
-import io.github.absdf15.chatbot.annotation.PointedBy
-import io.github.absdf15.chatbot.annotation.PointsTo
-import io.github.absdf15.chatbot.module.Permission
-import io.github.absdf15.chatbot.module.ActionParams
-import io.github.absdf15.chatbot.utils.MessageUtils.Companion.safeSendMessage
+import io.github.absdf15.qbot.core.annotation.Command
+import io.github.absdf15.qbot.core.annotation.Component
+import io.github.absdf15.qbot.core.annotation.PointedBy
+import io.github.absdf15.qbot.core.annotation.PointsTo
+import io.github.absdf15.qbot.core.module.common.ActionParams
+import io.github.absdf15.qbot.core.module.common.Permission
+import io.github.absdf15.qbot.core.utils.MessageUtils.Companion.safeSendMessage
 
-object MenuCommand {
+@Component
+public object MenuCommand {
     @PointsTo
     @Command("菜单")
-    suspend fun ActionParams.menu(){
+     suspend fun ActionParams.menu(){
         messageEvent.sender.apply {
             val text = buildString {
                 appendLine("1. GPT指令")
@@ -22,7 +24,7 @@ object MenuCommand {
     }
 
     @PointedBy(source = "菜单", index = 2)
-    @Command(value = "管理员指令", permission = Permission.BOT_ADMIN)
+    @Command(searchTerm = "管理员指令", permission = Permission.BOT_ADMIN)
     suspend fun ActionParams.adminMenu(){
         messageEvent.sender.apply {
             val text = buildString {
@@ -34,7 +36,7 @@ object MenuCommand {
         }
     }
     @PointedBy(source = "菜单", index = 1)
-    @Command(value = "GPT指令", permission = Permission.BOT_ADMIN)
+    @Command( "GPT指令", permission = Permission.BOT_ADMIN)
     suspend fun ActionParams.gptMenu(){
         messageEvent.sender.apply {
             val text = buildString {

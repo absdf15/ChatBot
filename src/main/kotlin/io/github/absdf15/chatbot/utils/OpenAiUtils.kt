@@ -9,9 +9,6 @@ import io.github.absdf15.chatbot.module.common.Constants
 import io.github.absdf15.chatbot.module.common.Constants.Companion.fetchApiResult
 import io.github.absdf15.chatbot.module.common.Constants.Companion.getCurrentModel
 import io.github.absdf15.chatbot.module.common.Constants.Companion.getPrompt
-import io.github.absdf15.chatbot.utils.MessageUtils.Companion.safeSendAndRecallAsync
-import io.github.absdf15.chatbot.utils.MessageUtils.Companion.safeSendMessage
-import io.github.absdf15.chatbot.utils.OpenAiUtils.Companion.filter
 import io.github.absdf15.chatbot.utils.TextUtils.Companion.filter
 import io.github.absdf15.openai.exception.OpenAIException
 import io.github.absdf15.openai.module.ChatMessage
@@ -20,6 +17,8 @@ import io.github.absdf15.openai.module.Role
 import io.github.absdf15.openai.module.chat.ChatCompletion
 import io.github.absdf15.openai.module.chat.ChatInfo
 import io.github.absdf15.openai.module.search.Call
+import io.github.absdf15.qbot.core.utils.MessageUtils.Companion.safeSendAndRecallAsync
+import io.github.absdf15.qbot.core.utils.MessageUtils.Companion.safeSendMessage
 import io.ktor.client.network.sockets.*
 import kotlinx.coroutines.sync.withLock
 import net.mamoe.mirai.contact.User

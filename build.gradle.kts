@@ -9,6 +9,7 @@ group = "io.github.absdf15"
 version = "1.1.1"
 
 repositories {
+    mavenLocal()
     mavenCentral()
 }
 val ktorVersion = "2.2.4"
@@ -38,10 +39,12 @@ dependencies {
     testImplementation("xyz.cssxsh.mirai:mirai-selenium-plugin:2.3.0")
     // 审核类库
     implementation("io.github.toolgood:toolgood-words:3.1.0.0")
+    // 核心前置
+    compileOnly("io.github.absdf15.qbot.core:QBotCore:0.1.0")
 }
 
 repositories {
-
+    mavenLocal()
     mavenCentral()
 }
 
