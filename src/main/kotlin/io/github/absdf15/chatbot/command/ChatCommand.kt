@@ -14,7 +14,9 @@ import io.github.absdf15.chatbot.utils.OpenAiUtils.Companion.generateCallApi
 import io.github.absdf15.chatbot.utils.OpenAiUtils.Companion.queryOrChat
 import io.github.absdf15.chatbot.utils.OpenAiUtils.Companion.replyText
 import io.github.absdf15.openai.module.OpenAIModel
+import io.github.absdf15.openai.module.Role
 import io.github.absdf15.openai.module.search.Api
+import io.github.absdf15.openai.module.search.Call
 import io.github.absdf15.qbot.core.annotation.Command
 import io.github.absdf15.qbot.core.annotation.Component
 import io.github.absdf15.qbot.core.module.common.ActionParams
@@ -22,12 +24,14 @@ import io.github.absdf15.qbot.core.module.common.MatchType
 import io.github.absdf15.qbot.core.utils.MessageUtils.Companion.safeGetCode
 import io.github.absdf15.qbot.core.utils.MessageUtils.Companion.safeSendAndRecallAsync
 import io.github.absdf15.qbot.core.utils.MessageUtils.Companion.safeSendMessage
+import net.mamoe.mirai.contact.nameCardOrNick
 import net.mamoe.mirai.message.data.ForwardMessageBuilder
+import net.mamoe.mirai.message.data.buildForwardMessage
 import net.mamoe.mirai.message.data.toPlainText
 import net.mamoe.mirai.utils.ExternalResource.Companion.uploadAsImage
 
 @Component
-public object ChatCommand {
+object ChatCommand {
 
     /**
      * 根据API回调结果回复
@@ -45,79 +49,11 @@ public object ChatCommand {
                 return@queryOrChat
             }
             val (call, chatInfo) = sender.generateCallApi(text) ?: return@queryOrChat
-            var hasGoogleRequest = false
-            var hasCalculatorRequest = false
-            var hasWikiRequest = false
-            val jsonObject = JsonObject()
-            var wikiArray: JsonArray? = null
-            var wolframArray: JsonArray? = null
-            var googleArray: JsonArray? = null
-            var exceptionNumber: Int = 0
-            for (request in call.calls) {
-                when (request.api) {
-                    Api.WikiSearch.toString() -> {
-                        val response =
-                            try {
-                                HttpUtils.wiki(request.query)
-                            } catch (e: Exception) {
-                                exceptionNumber++
-                                continue
-                            }
-                        if (!hasWikiRequest) {
-                            wikiArray = JsonArray()
-                            hasWikiRequest = true
-                        }
-                        wikiArray?.add(response)
-                    }
-
-                    Api.Calculator.toString() -> {
-                        val response =
-                            try {
-                                HttpUtils.wolfram(request.query) ?: continue
-                            } catch (e: Exception) {
-                                exceptionNumber++
-                                continue
-                            }
-
-                        if (!hasCalculatorRequest) {
-                            wolframArray = JsonArray()
-                            hasCalculatorRequest = true
-                        }
-                        wolframArray?.add(response)
-                    }
-
-                    Api.Google.toString() -> {
-                        val response = try {
-                            HttpUtils.google(request.query) ?: continue
-                        } catch (e: Exception) {
-                            exceptionNumber++
-                            continue
-                        }
-                        if (!hasGoogleRequest) {
-                            googleArray = JsonArray()
-                            hasGoogleRequest = true
-                        }
-                        googleArray?.add(response)
-                    }
-                }
-            }
-            wikiArray.takeIf { it != null }?.let {
-                jsonObject.add("wiki", it)
-            }
-
-            wolframArray.takeIf { it != null }?.let {
-                jsonObject.add("wolfram", it)
-            }
-
-            googleArray.takeIf { it != null }?.let {
-                jsonObject.add("google", it)
-            }
-
+            val (jsonObject,exceptionNumber) = callApi(call)
 
             val replyInfo = sender.replyText(query = text, result = jsonObject) ?: return@queryOrChat
             var senderText = replyInfo.choices[0].message?.content ?: return@queryOrChat
             val usage = replyInfo.usage.totalTokens + chatInfo.usage.totalTokens
-
             ChatBot.logger.info("exceptionNumber:$exceptionNumber")
             exceptionNumber.takeIf { it != 0 }?.let {
                 sender.safeSendMessage("总请求数为:${call.calls.size}\n累计请求错误数为：${exceptionNumber}\n该数据会影响回答的准确性！")
@@ -134,6 +70,36 @@ public object ChatCommand {
         }
     }
 
+
+    @Command("#聊天记录")
+    suspend fun ActionParams.chatMessageHistories(){
+        messageEvent.apply {
+            val messages = Constants.CHAT_MESSAGES[messageEvent.sender.safeGetCode()] ?: let {
+                sender.safeSendMessage("消息列表为空哦～请聊天后再来吧～")
+                return
+            }
+            val forwardMessage = buildForwardMessage {
+                messages.forEach {
+                    if (it.role == Role.USER)
+                        sender.id named sender.nameCardOrNick says it.content
+                    else
+                        bot.id named bot.nameCardOrNick says it.content
+                }
+            }
+            sender.safeSendMessage(forwardMessage)
+        }
+    }
+
+    @Command("#导出聊天记录")
+    suspend fun ActionParams.exportChatMessageHistories(){
+        messageEvent.apply {
+            val messages = Constants.CHAT_MESSAGES[messageEvent.sender.safeGetCode()] ?: let {
+                sender.safeSendMessage("消息列表为空哦～请聊天后再来吧～")
+                return
+            }
+           // TODO
+        }
+    }
     /**
      * gpt显示提示列表
      */
@@ -218,4 +184,81 @@ public object ChatCommand {
             else sender.safeSendMessage("会话共享关闭")
         }
     }
+
+    /**
+     * 调用API并存入[JsonObject]
+     * @param call 需要调用的 API
+     * @return 处理后的[JsonObject],以及调用过程中报错的次数
+     */
+    private suspend fun ActionParams.callApi(call: Call): Pair<JsonObject, Int> {
+        var hasGoogleRequest = false
+        var hasCalculatorRequest = false
+        var hasWikiRequest = false
+        val jsonObject = JsonObject()
+        var wikiArray: JsonArray? = null
+        var wolframArray: JsonArray? = null
+        var googleArray: JsonArray? = null
+        var exceptionNumber = 0
+        for (request in call.calls) {
+            when (request.api) {
+                Api.WikiSearch.toString() -> {
+                    val response =
+                        try {
+                            HttpUtils.wiki(request.query)
+                        } catch (e: Exception) {
+                            exceptionNumber++
+                            continue
+                        }
+                    if (!hasWikiRequest) {
+                        wikiArray = JsonArray()
+                        hasWikiRequest = true
+                    }
+                    wikiArray?.add(response)
+                }
+
+                Api.Calculator.toString() -> {
+                    val response =
+                        try {
+                            HttpUtils.wolfram(request.query) ?: continue
+                        } catch (e: Exception) {
+                            exceptionNumber++
+                            continue
+                        }
+
+                    if (!hasCalculatorRequest) {
+                        wolframArray = JsonArray()
+                        hasCalculatorRequest = true
+                    }
+                    wolframArray?.add(response)
+                }
+
+                Api.Google.toString() -> {
+                    val response = try {
+                        HttpUtils.google(request.query) ?: continue
+                    } catch (e: Exception) {
+                        exceptionNumber++
+                        continue
+                    }
+                    if (!hasGoogleRequest) {
+                        googleArray = JsonArray()
+                        hasGoogleRequest = true
+                    }
+                    googleArray?.add(response)
+                }
+            }
+        }
+        wikiArray.takeIf { it != null }?.let {
+            jsonObject.add("wiki", it)
+        }
+
+        wolframArray.takeIf { it != null }?.let {
+            jsonObject.add("wolfram", it)
+        }
+
+        googleArray.takeIf { it != null }?.let {
+            jsonObject.add("google", it)
+        }
+        return jsonObject to exceptionNumber
+    }
+
 }
