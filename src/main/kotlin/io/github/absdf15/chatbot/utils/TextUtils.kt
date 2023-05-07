@@ -4,13 +4,21 @@ package io.github.absdf15.chatbot.utils
 import com.hankcs.hanlp.dictionary.stopword.CoreStopWordDictionary
 import com.hankcs.hanlp.seg.common.Term
 import com.hankcs.hanlp.tokenizer.StandardTokenizer
+import io.github.absdf15.chatbot.config.ChatSettings
 import io.github.absdf15.chatbot.module.common.Constants
+import net.mamoe.mirai.event.events.GroupMessageEvent
+import net.mamoe.mirai.event.events.MessageEvent
 import java.util.regex.Pattern
 
 class TextUtils {
 
 
     companion object {
+        fun MessageEvent.getSessionId() =
+            if (this is GroupMessageEvent && ChatSettings.hasSessionShared[group.id] == true) subject.id
+            else sender.id
+
+
         /**
          * 获取存储位置
          */
@@ -90,7 +98,6 @@ class TextUtils {
             }
             return output
         }
-
 
 
         /**

@@ -38,6 +38,13 @@ object ChatBot : QBotPlugin(
         logger.info { "ChatBot-Plugin loaded." }
         loadChatSettings()
         loadFilter()
+        loadTmpFolder()
+    }
+
+    private fun loadTmpFolder() {
+        val file = resolveDataFile("tmp")
+        file.delete()
+        file.mkdirs()
     }
 
     private fun loadFilter() {

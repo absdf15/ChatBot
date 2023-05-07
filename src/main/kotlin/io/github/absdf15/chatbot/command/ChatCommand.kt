@@ -3,6 +3,7 @@ package io.github.absdf15.chatbot.command
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import io.github.absdf15.chatbot.ChatBot
+import io.github.absdf15.chatbot.ChatBot.resolveDataFile
 import io.github.absdf15.chatbot.config.ApiConfig
 import io.github.absdf15.chatbot.config.ChatSettings
 import io.github.absdf15.chatbot.module.common.Constants
@@ -13,6 +14,7 @@ import io.github.absdf15.chatbot.utils.MarkdownUtils.Companion.convertMarkdownTo
 import io.github.absdf15.chatbot.utils.OpenAiUtils.Companion.generateCallApi
 import io.github.absdf15.chatbot.utils.OpenAiUtils.Companion.queryOrChat
 import io.github.absdf15.chatbot.utils.OpenAiUtils.Companion.replyText
+import io.github.absdf15.chatbot.utils.TextUtils.Companion.getSessionId
 import io.github.absdf15.openai.module.OpenAIModel
 import io.github.absdf15.openai.module.Role
 import io.github.absdf15.openai.module.search.Api
@@ -24,11 +26,21 @@ import io.github.absdf15.qbot.core.module.common.MatchType
 import io.github.absdf15.qbot.core.utils.MessageUtils.Companion.safeGetCode
 import io.github.absdf15.qbot.core.utils.MessageUtils.Companion.safeSendAndRecallAsync
 import io.github.absdf15.qbot.core.utils.MessageUtils.Companion.safeSendMessage
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import net.mamoe.mirai.contact.nameCardOrNick
+import net.mamoe.mirai.event.events.FriendMessageEvent
+import net.mamoe.mirai.event.events.GroupMessageEvent
 import net.mamoe.mirai.message.data.ForwardMessageBuilder
 import net.mamoe.mirai.message.data.buildForwardMessage
 import net.mamoe.mirai.message.data.toPlainText
+import net.mamoe.mirai.utils.ExternalResource.Companion.toExternalResource
 import net.mamoe.mirai.utils.ExternalResource.Companion.uploadAsImage
+import java.text.SimpleDateFormat
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 
 @Component
 object ChatCommand {
@@ -49,7 +61,7 @@ object ChatCommand {
                 return@queryOrChat
             }
             val (call, chatInfo) = sender.generateCallApi(text) ?: return@queryOrChat
-            val (jsonObject,exceptionNumber) = callApi(call)
+            val (jsonObject, exceptionNumber) = callApi(call)
 
             val replyInfo = sender.replyText(query = text, result = jsonObject) ?: return@queryOrChat
             var senderText = replyInfo.choices[0].message?.content ?: return@queryOrChat
@@ -72,34 +84,64 @@ object ChatCommand {
 
 
     @Command("#聊天记录")
-    suspend fun ActionParams.chatMessageHistories(){
+    suspend fun ActionParams.chatMessageHistories() {
         messageEvent.apply {
-            val messages = Constants.CHAT_MESSAGES[messageEvent.sender.safeGetCode()] ?: let {
+             val messages = Constants.CHAT_MESSAGES[getSessionId()] ?: let {
                 sender.safeSendMessage("消息列表为空哦～请聊天后再来吧～")
                 return
             }
             val forwardMessage = buildForwardMessage {
-                messages.forEach {
+                messages.forEachIndexed { index, it ->
                     if (it.role == Role.USER)
-                        sender.id named sender.nameCardOrNick says it.content
+                        sender.id named sender.nameCardOrNick says it.content+ "\n 消息序列: $index"
                     else
-                        bot.id named bot.nameCardOrNick says it.content
+                        bot.id named bot.nameCardOrNick says it.content + "\n 消息序列: $index"
                 }
             }
             sender.safeSendMessage(forwardMessage)
         }
     }
 
+    @OptIn(DelicateCoroutinesApi::class)
     @Command("#导出聊天记录")
-    suspend fun ActionParams.exportChatMessageHistories(){
+    suspend fun ActionParams.exportChatMessageHistories() {
         messageEvent.apply {
-            val messages = Constants.CHAT_MESSAGES[messageEvent.sender.safeGetCode()] ?: let {
+            val messages = Constants.CHAT_MESSAGES[getSessionId()] ?: let {
                 sender.safeSendMessage("消息列表为空哦～请聊天后再来吧～")
                 return
             }
-           // TODO
+            val text = buildString {
+                messages.forEach {
+                    if (it.role == Role.USER) {
+                        appendLine("${sender.nameCardOrNick}:")
+                        appendLine(it.content)
+                    } else {
+                        appendLine("${bot.nameCardOrNick}:")
+                        appendLine(it.content)
+                    }
+                }
+            }
+            val currentDateTime = LocalDateTime.now()
+            val formatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
+            val formattedDateTime = currentDateTime.format(formatter)
+            val fileName = "tmp/${formattedDateTime}_${sender.id}.txt"
+            val file = resolveDataFile(fileName)
+            file.writeBytes(text.toByteArray())
+            if (messageEvent is GroupMessageEvent) {
+                val resource = file.toExternalResource()
+                val absoluteFile =
+                    (this as GroupMessageEvent).group.files.uploadNewFile(fileName, resource)
+                resource.close()
+                GlobalScope.launch {
+                    delay(5 * 60 * 1000)
+                    println("Blocked for 5 minutes.")
+                }
+            } else if (this is FriendMessageEvent) {
+                // TODO 找不到好友发送文件的方法
+            }
         }
     }
+
     /**
      * gpt显示提示列表
      */
