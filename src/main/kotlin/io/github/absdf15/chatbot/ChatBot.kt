@@ -25,7 +25,7 @@ object ChatBot : QBotPlugin(
         JvmPluginDescription(
             id = "io.github.absdf15.chatbot",
             name = "ChatBot",
-            version = "1.1.2",
+            version = "1.1.3",
         ) {
             author("absdf15")
             dependsOn("xyz.cssxsh.mirai.plugin.mirai-selenium-plugin", true)
