@@ -109,7 +109,8 @@ object ChatCommand {
     @Command("#导出聊天记录")
     suspend fun ActionParams.exportChatMessageHistories() {
         messageEvent.apply {
-            val messages = Constants.CHAT_MESSAGES[getSessionId()] ?: let {
+            val messages = Constants.CHAT_MESSAGES[getSessionId()]
+            if (messages.isNullOrEmpty()){
                 sender.safeSendMessage("消息列表为空哦～请聊天后再来吧～")
                 return
             }
@@ -133,7 +134,7 @@ object ChatCommand {
             if (messageEvent is GroupMessageEvent) {
                 val resource = file.toExternalResource()
                 val absoluteFile =
-                    (this as GroupMessageEvent).group.files.uploadNewFile("/$fileName", resource)
+                    (this as GroupMessageEvent).group.files.uploadNewFile(fileName, resource)
                 resource.close()
                 GlobalScope.launch {
                     delay(5 * 60 * 1000)
@@ -158,8 +159,8 @@ object ChatCommand {
             val sendText = buildString {
                 append("当前最后一条消息为")
                 when (role) {
-                    Role.USER -> append("${sender.nick}发送的内容，请输入”#响应“来获取结果。")
-                    else -> append("机器人的响应结果，请使用@继续对话吧！")
+                    Role.USER -> append("${sender.nick}发送的内容，请使用@继续对话吧！")
+                    else -> append("机器人的响应结果，请输入”#响应“来获取结果。")
                 }
             }
             sender.safeSendMessage(sendText)
