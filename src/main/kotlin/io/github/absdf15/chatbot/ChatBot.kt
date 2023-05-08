@@ -2,6 +2,7 @@ package io.github.absdf15.chatbot
 
 
 import io.github.absdf15.chatbot.config.*
+import io.github.absdf15.chatbot.handle.BotEventHandler
 import io.github.absdf15.chatbot.handle.MessageHandler
 import io.github.absdf15.chatbot.module.chat.ChatPromptData
 import io.github.absdf15.chatbot.module.common.Constants
@@ -39,6 +40,7 @@ object ChatBot : QBotPlugin(
         loadChatSettings()
         loadFilter()
         loadTmpFolder()
+        BotEventHandler.registerTo(GlobalEventChannel)
     }
 
     private fun loadTmpFolder() {

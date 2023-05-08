@@ -11,10 +11,12 @@ import io.github.absdf15.chatbot.module.common.Constants.Companion.getCurrentMod
 import io.github.absdf15.chatbot.utils.HttpUtils
 import io.github.absdf15.chatbot.utils.MarkdownUtils
 import io.github.absdf15.chatbot.utils.MarkdownUtils.Companion.convertMarkdownToImg
+import io.github.absdf15.chatbot.utils.OpenAiUtils.Companion.chat
 import io.github.absdf15.chatbot.utils.OpenAiUtils.Companion.generateCallApi
 import io.github.absdf15.chatbot.utils.OpenAiUtils.Companion.queryOrChat
 import io.github.absdf15.chatbot.utils.OpenAiUtils.Companion.replyText
 import io.github.absdf15.chatbot.utils.TextUtils.Companion.getSessionId
+import io.github.absdf15.openai.module.ChatMessage
 import io.github.absdf15.openai.module.OpenAIModel
 import io.github.absdf15.openai.module.Role
 import io.github.absdf15.openai.module.search.Api
@@ -33,12 +35,12 @@ import kotlinx.coroutines.launch
 import net.mamoe.mirai.contact.nameCardOrNick
 import net.mamoe.mirai.event.events.FriendMessageEvent
 import net.mamoe.mirai.event.events.GroupMessageEvent
+import net.mamoe.mirai.event.events.MessageEvent
 import net.mamoe.mirai.message.data.ForwardMessageBuilder
 import net.mamoe.mirai.message.data.buildForwardMessage
 import net.mamoe.mirai.message.data.toPlainText
 import net.mamoe.mirai.utils.ExternalResource.Companion.toExternalResource
 import net.mamoe.mirai.utils.ExternalResource.Companion.uploadAsImage
-import java.text.SimpleDateFormat
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -86,16 +88,17 @@ object ChatCommand {
     @Command("#聊天记录")
     suspend fun ActionParams.chatMessageHistories() {
         messageEvent.apply {
-             val messages = Constants.CHAT_MESSAGES[getSessionId()] ?: let {
+            val messages = Constants.CHAT_MESSAGES[getSessionId()]
+            if (messages.isNullOrEmpty()){
                 sender.safeSendMessage("消息列表为空哦～请聊天后再来吧～")
                 return
             }
             val forwardMessage = buildForwardMessage {
                 messages.forEachIndexed { index, it ->
                     if (it.role == Role.USER)
-                        sender.id named sender.nameCardOrNick says it.content+ "\n 消息序列: $index"
+                        sender.id named sender.nameCardOrNick says it.content + "\n 消息序列: ${index + 1}"
                     else
-                        bot.id named bot.nameCardOrNick says it.content + "\n 消息序列: $index"
+                        bot.id named bot.nameCardOrNick says it.content + "\n 消息序列: ${index + 1}"
                 }
             }
             sender.safeSendMessage(forwardMessage)
@@ -130,14 +133,66 @@ object ChatCommand {
             if (messageEvent is GroupMessageEvent) {
                 val resource = file.toExternalResource()
                 val absoluteFile =
-                    (this as GroupMessageEvent).group.files.uploadNewFile(fileName, resource)
+                    (this as GroupMessageEvent).group.files.uploadNewFile("/$fileName", resource)
                 resource.close()
                 GlobalScope.launch {
                     delay(5 * 60 * 1000)
-                    println("Blocked for 5 minutes.")
+                    absoluteFile.delete()
                 }
             } else if (this is FriendMessageEvent) {
                 // TODO 找不到好友发送文件的方法
+            }
+        }
+    }
+
+    @Command("^#切换至\\s*\\d*?\$", matchType = MatchType.REGEX_MATCH)
+    suspend fun ActionParams.switchMessage() {
+        messageEvent.apply {
+            val (code, messages) = parsecAndGetCode() ?: return
+            val message = messages[code]
+            val role = message.role
+            val aList = arrayListOf<ChatMessage>()
+            aList.addAll(messages.dropLast(messages.size - code))
+            messages.clear()
+            messages.addAll(aList)
+            val sendText = buildString {
+                append("当前最后一条消息为")
+                when (role) {
+                    Role.USER -> append("${sender.nick}发送的内容，请输入”#响应“来获取结果。")
+                    else -> append("机器人的响应结果，请使用@继续对话吧！")
+                }
+            }
+            sender.safeSendMessage(sendText)
+        }
+    }
+
+    @Command("^#切换\\s*\\d*?\$", matchType = MatchType.REGEX_MATCH)
+    suspend fun ActionParams.switchAndSendMessage() {
+        messageEvent.apply {
+            val (code, messages) = parsecAndGetCode() ?: return
+            val message = messages[code]
+            val role = message.role
+            val aList = arrayListOf<ChatMessage>()
+            when (role) {
+                Role.USER -> aList.addAll(messages.dropLast(messages.size - code + 1))
+                Role.ASSISTANT -> aList.addAll(messages.dropLast(messages.size - code))
+                else -> {
+                    sender.safeSendMessage("奇怪的事情发生了！")
+                    return
+                }
+            }
+            messages.clear()
+            messages.addAll(aList)
+            sendRequest()
+
+        }
+    }
+
+    @Command("#响应")
+    suspend fun ActionParams.sendRequest() {
+        messageEvent.apply {
+            queryOrChat {
+                chat(isDirect = true)
             }
         }
     }
@@ -207,11 +262,11 @@ object ChatCommand {
 
     @Command("清空会话")
     suspend fun ActionParams.cleanSession() {
-        messageEvent.sender.apply {
-            val code = safeGetCode()
+        messageEvent.apply {
+            val code = getSessionId()
             Constants.CHAT_MESSAGES[code]?.clear()
-            if (Constants.CHAT_MESSAGES[code] == null) {
-                safeSendMessage("会话已清空！")
+            if (Constants.CHAT_MESSAGES[code].isNullOrEmpty()) {
+                sender.safeSendMessage("会话已清空！")
             }
         }
     }
@@ -301,6 +356,26 @@ object ChatCommand {
             jsonObject.add("google", it)
         }
         return jsonObject to exceptionNumber
+    }
+
+    private suspend fun ActionParams.parsecAndGetCode(): Pair<Int, ArrayList<ChatMessage>>? {
+        messageEvent.apply {
+            val sessionId = getSessionId()
+            val messages = Constants.CHAT_MESSAGES[sessionId] ?: return null
+            val list = Regex("#切换(至)?(\\d+)?").find(rawCommand)
+            val code = list?.groupValues?.getOrNull(2)?.trim()?.toIntOrNull() ?: args.getOrNull(0)?.toIntOrNull()
+            ?: let {
+                sender.safeSendMessage("请输入消息序列！")
+                return null
+            }
+            if (messages.size == 0 || messages.size < code) return null
+            if (code == 1 || code == 0) {
+                sender.safeSendMessage("清空会话！")
+                messages.clear()
+                return null
+            }
+            return code to messages
+        }
     }
 
 }

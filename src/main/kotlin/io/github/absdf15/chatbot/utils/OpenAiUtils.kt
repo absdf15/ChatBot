@@ -5,11 +5,13 @@ import com.google.gson.JsonObject
 import io.github.absdf15.chatbot.ChatBot
 import io.github.absdf15.chatbot.config.ChatConfig
 import io.github.absdf15.chatbot.config.ChatSettings
+import io.github.absdf15.chatbot.module.chat.PromptChatSettings
 import io.github.absdf15.chatbot.module.common.Constants
 import io.github.absdf15.chatbot.module.common.Constants.Companion.fetchApiResult
 import io.github.absdf15.chatbot.module.common.Constants.Companion.getCurrentModel
 import io.github.absdf15.chatbot.module.common.Constants.Companion.getPrompt
 import io.github.absdf15.chatbot.utils.TextUtils.Companion.filter
+import io.github.absdf15.chatbot.utils.TextUtils.Companion.getSessionId
 import io.github.absdf15.openai.exception.OpenAIException
 import io.github.absdf15.openai.module.ChatMessage
 import io.github.absdf15.openai.module.OpenAIModel
@@ -33,13 +35,15 @@ class OpenAiUtils {
         /**
          * 查询或聊天
          */
-        suspend fun MessageEvent.queryOrChat(text: String, action: suspend MessageEvent.() -> Unit) {
-            val isFilter = text.filter()
-            ChatBot.logger.info("isFilter:$isFilter")
-            if (isFilter == true) {
-                sender.filter(text).takeIf { it }?.let {
-                    sender.safeSendMessage("该内容不合规，请重新编辑后输出！")
-                    return
+        suspend fun MessageEvent.queryOrChat(text: String? = null, action: suspend MessageEvent.() -> Unit) {
+            if (!text.isNullOrEmpty()){
+                val isFilter = text.filter()
+                ChatBot.logger.info("isFilter:$isFilter")
+                if (isFilter == true) {
+                    sender.filter(text).takeIf { it }?.let {
+                        sender.safeSendMessage("该内容不合规，请重新编辑后输出！")
+                        return
+                    }
                 }
             }
             sender.fetchApiResult {
@@ -52,16 +56,18 @@ class OpenAiUtils {
                 }
             }
         }
+
         /**
          * 聊天
          */
-        suspend fun MessageEvent.chat(text: String) {
-            val sessionId = if (ChatSettings.hasSessionShared[subject.id] == true) subject.id else sender.id
+        suspend fun MessageEvent.chat(text: String? = null, isDirect: Boolean = false) {
+            val sessionId = getSessionId()
             val result = initPrompt(sessionId)
-            ChatBot.logger.info("初始化结果：$result")
+            ChatBot.logger.info("模板初始化结果：$result")
             if (result >= 0) {
                 ChatBot.logger.info("进入If语句：result >= 0")
-                sender.chatHandle(text, sessionId)
+                if (!isDirect && !text.isNullOrEmpty()) sender.chatHandle(text,sessionId)
+                else if (isDirect) sender.chatHandle(sessionId)
             }
         }
 
@@ -106,7 +112,7 @@ class OpenAiUtils {
          * @param sessionId 群号或QQ号，用于存储聊天记录（若会话共享则为群号）
          */
         fun initPrompt(sessionId: Long): Int {
-            val promptName =  Constants.safeGetPrompt(sessionId)
+            val promptName = Constants.safeGetPrompt(sessionId)
             if (promptName == "NONE") {
                 Constants.CHAT_MESSAGES[sessionId] = arrayListOf()
                 return 1
@@ -188,6 +194,37 @@ class OpenAiUtils {
                 return
             }
             messages.add(ChatMessage(Role.USER, senderText))
+            sendRequest(settings,messages,currentModule)
+        }
+
+        /**
+         * 处理chat请求
+         * @param sessionId 群号或QQ号，用于存储聊天记录（若会话共享则为群号）
+         */
+        suspend fun User.chatHandle(
+            sessionId: Long
+        ) {
+            ChatBot.logger.info("进入chatHandle函数")
+            val promptName = Constants.safeGetPrompt(sessionId)
+            val settings = Constants.PROMPT_SETTING_FILES[promptName]
+            val currentModule = getCurrentModel()
+            val messages = Constants.CHAT_MESSAGES[sessionId] ?: let {
+                ChatBot.logger.info("messages为空，return。")
+                return
+            }
+            sendRequest(settings,messages,currentModule)
+        }
+
+        /**
+         * 发送chat请求
+         *
+         */
+        private suspend fun User.sendRequest(
+            settings: PromptChatSettings?,
+            messages: ArrayList<ChatMessage>,
+            currentModule:OpenAIModel
+        ) {
+
             val completion = if (settings == null)
                 ChatCompletion(
                     model = currentModule,
@@ -222,6 +259,7 @@ class OpenAiUtils {
                 timeInMinutes = 5
             )
         }
+
 
 
         /**

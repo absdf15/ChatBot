@@ -31,7 +31,7 @@ object PermissionCommand {
     suspend fun ActionParams.setGroupStatus() {
         messageEvent.apply {
             val list = command.split("群", limit = 2)
-            val code = list.getOrNull(0)?.trim()?.toLongOrNull() ?: args.getOrNull(0)?.toLongOrNull()
+            val code = list.getOrNull(1)?.trim()?.toLongOrNull() ?: args.getOrNull(0)?.toLongOrNull()
             ?: if (this is GroupMessageEvent) subject.id else {
                 sender.safeSendMessage("请输入群号！")
                 return

@@ -44,7 +44,12 @@ public object MenuCommand {
                 appendLine("2. 人格列表")
                 appendLine("3. 清空会话")
                 appendLine("4. @机器人 即可对话")
-                append("5. /q[文本] 查询内容并根据API回复")
+                appendLine("5. /q[文本] 查询内容并根据API回复")
+                appendLine("6. #切换[消息序号] 切换消息并回复")
+                appendLine("7. #响应 获取机器人响应")
+                appendLine("8. #切换至[消息序号] 切换消息不回复")
+                appendLine("9. #聊天记录 查看你与BOT的聊天记录及序号")
+                append("10. #导出聊天记录 导出聊天记录至群聊")
             }
             safeSendMessage(text)
         }
