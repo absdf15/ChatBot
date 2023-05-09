@@ -29,7 +29,7 @@ object ChatBot : QBotPlugin(
         ) {
             author("absdf15")
             dependsOn("xyz.cssxsh.mirai.plugin.mirai-selenium-plugin", true)
-            dependsOn("io.github.absdf15.qbot.core","0.1.0",false)
+            dependsOn("io.github.absdf15.qbot.core","0.1.1",false)
         },
         commandPath = "io.github.absdf15.chatbot.command",
         classes = arrayListOf(MessageHandler::class)

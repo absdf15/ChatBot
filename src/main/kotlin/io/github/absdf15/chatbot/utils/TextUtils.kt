@@ -8,6 +8,8 @@ import io.github.absdf15.chatbot.config.ChatSettings
 import io.github.absdf15.chatbot.module.common.Constants
 import net.mamoe.mirai.event.events.GroupMessageEvent
 import net.mamoe.mirai.event.events.MessageEvent
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.regex.Pattern
 
 class TextUtils {
@@ -18,6 +20,11 @@ class TextUtils {
             if (this is GroupMessageEvent && ChatSettings.hasSessionShared[group.id] == true) subject.id
             else sender.id
 
+        fun getCurrentDateTime(): String? {
+            val currentDateTime = LocalDateTime.now()
+            val formatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
+            return currentDateTime.format(formatter)
+        }
 
         /**
          * 获取存储位置

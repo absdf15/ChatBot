@@ -10,9 +10,9 @@ internal object ChatPromptData {
 
     private val promptRootFolder: File = resolveDataFile("prompt")
 
-    private val promptFolder: File = resolveDataFile("prompt/prompt")
-    private val prefixFolder: File = resolveDataFile("prompt/prefix")
-    private val suffixFolder: File = resolveDataFile("prompt/suffix")
+    val promptFolder: File = resolveDataFile("prompt/prompt")
+    val prefixFolder: File = resolveDataFile("prompt/prefix")
+    val suffixFolder: File = resolveDataFile("prompt/suffix")
     private val settingsFolder: File = resolveDataFile("prompt/settings")
     private val searchPromptFolder: File = resolveDataFile("prompt/searchPrompt")
     fun reload() {
@@ -23,7 +23,6 @@ internal object ChatPromptData {
         if (!settingsFolder.exists()) settingsFolder.mkdir()
         if (!searchPromptFolder.exists()) searchPromptFolder.mkdir()
 
-        ChatBot.logger.info(promptRootFolder.absolutePath)
         val promptRegex = Regex("^prompt-(.*)\\.txt$")
         val promptFiles = promptFolder.listFiles { file ->
             file.isFile && promptRegex.matches(file.name)

@@ -6,6 +6,9 @@ import io.github.absdf15.chatbot.ChatBot
 import io.github.absdf15.chatbot.ChatBot.resolveDataFile
 import io.github.absdf15.chatbot.config.ApiConfig
 import io.github.absdf15.chatbot.config.ChatSettings
+import io.github.absdf15.chatbot.module.chat.ChatPromptData
+import io.github.absdf15.chatbot.module.chat.TempInfo
+import io.github.absdf15.chatbot.module.chat.TempType
 import io.github.absdf15.chatbot.module.common.Constants
 import io.github.absdf15.chatbot.module.common.Constants.Companion.getCurrentModel
 import io.github.absdf15.chatbot.utils.HttpUtils
@@ -15,6 +18,7 @@ import io.github.absdf15.chatbot.utils.OpenAiUtils.Companion.chat
 import io.github.absdf15.chatbot.utils.OpenAiUtils.Companion.generateCallApi
 import io.github.absdf15.chatbot.utils.OpenAiUtils.Companion.queryOrChat
 import io.github.absdf15.chatbot.utils.OpenAiUtils.Companion.replyText
+import io.github.absdf15.chatbot.utils.TextUtils.Companion.getCurrentDateTime
 import io.github.absdf15.chatbot.utils.TextUtils.Companion.getSessionId
 import io.github.absdf15.openai.module.ChatMessage
 import io.github.absdf15.openai.module.OpenAIModel
@@ -23,11 +27,14 @@ import io.github.absdf15.openai.module.search.Api
 import io.github.absdf15.openai.module.search.Call
 import io.github.absdf15.qbot.core.annotation.Command
 import io.github.absdf15.qbot.core.annotation.Component
-import io.github.absdf15.qbot.core.module.common.ActionParams
-import io.github.absdf15.qbot.core.module.common.MatchType
-import io.github.absdf15.qbot.core.utils.MessageUtils.Companion.safeGetCode
+import io.github.absdf15.qbot.core.annotation.PointedBy
+import io.github.absdf15.qbot.core.annotation.PointsTo
+import io.github.absdf15.qbot.core.config.CoreConfig
+import io.github.absdf15.qbot.core.module.common.*
+import io.github.absdf15.qbot.core.utils.ConfigUtils
 import io.github.absdf15.qbot.core.utils.MessageUtils.Companion.safeSendAndRecallAsync
 import io.github.absdf15.qbot.core.utils.MessageUtils.Companion.safeSendMessage
+import io.ktor.util.*
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
@@ -36,16 +43,117 @@ import net.mamoe.mirai.contact.nameCardOrNick
 import net.mamoe.mirai.event.events.FriendMessageEvent
 import net.mamoe.mirai.event.events.GroupMessageEvent
 import net.mamoe.mirai.event.events.MessageEvent
-import net.mamoe.mirai.message.data.ForwardMessageBuilder
-import net.mamoe.mirai.message.data.buildForwardMessage
-import net.mamoe.mirai.message.data.toPlainText
+import net.mamoe.mirai.message.data.*
 import net.mamoe.mirai.utils.ExternalResource.Companion.toExternalResource
 import net.mamoe.mirai.utils.ExternalResource.Companion.uploadAsImage
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
+import java.io.File
+import java.util.*
 
 @Component
 object ChatCommand {
+
+
+    @Command("#导入模板", MatchType.EXACT_MATCH)
+    suspend fun ActionParams.importPrompt() {
+        messageEvent.apply {
+            val text = rawCommand.split("\\s+".toRegex(), limit = 2)[1].trim()
+            if (text.isEmpty()) {
+                sender.safeSendMessage("模板不能为空！")
+                return
+            }
+            CoreConfig.botOwners.forEach {
+                val friend = bot.getFriend(it)
+                if (friend != null) {
+                    friend.sendMessage("是否要添加下列模板(Y/N):")
+                    val tempId = "${getCurrentDateTime()}_${sender.id}"
+                    val forwardMessage = buildForwardMessage {
+                        bot.id named bot.nick says "id: $tempId"
+                        sender.id named senderName says text
+                    }
+                    friend.sendMessage("如果该请求不是最后一条,请使用 #handle [id] 来处理该请求。")
+                    Constants.TEMP_DATA.add(TempInfo(tempId, TempType.PROMPT, text))
+                    ConfigUtils.put(PointPair(friend.id, friend.id), "#导入模板" to 1)
+                    friend.sendMessage(forwardMessage)
+                }
+            }
+        }
+
+    }
+
+
+    @Command("#handle", permission = Permission.BOT_OWNER)
+    suspend fun ActionParams.handlePromptRequestById(){
+        if(messageEvent is FriendMessageEvent){
+            messageEvent.apply {
+                var data: TempInfo? = null
+                Constants.TEMP_DATA.forEach {
+                    if (args[0] == it.id) {
+                        data = it
+                    }
+                }
+                if (data == null) return
+                ConfigUtils.put(PointPair(sender.id, subject.id), "#导入模板" to 1)
+                sender.sendMessage("是否要添加下列模板(Y/N):")
+                val forwardMessage = buildForwardMessage {
+                    bot.id named bot.nick says "id: ${data!!.id}"
+                    sender.id named senderName says data!!.content
+                }
+                sender.safeSendMessage(forwardMessage)
+
+            }
+        }
+    }
+    @PointedBy("#导入模板")
+    suspend fun ActionParams.handlePrompt() {
+        if (messageEvent is FriendMessageEvent) {
+            messageEvent.apply {
+                val boolean = when (rawCommand.trim().lowercase(Locale.ENGLISH)) {
+                    "yes" -> true
+                    "y" -> true
+                    "n" -> false
+                    "no" -> false
+                    "是" -> true
+                    "否" -> false
+                    else -> false
+                }
+
+                val data = Constants.TEMP_DATA.last()
+                if (boolean) {
+                    sender.safeSendMessage("已同意id为${data.id}的请求，请输入模板命名:")
+                    ConfigUtils.put(
+                        PointPair(sender.id, subject.id),
+                        "io.github.absdf15.chatbot.command.ChatCommand.handlePrompt" to 1
+                    )
+                } else {
+                    Constants.TEMP_DATA.remove(Constants.TEMP_DATA.last())
+                    sender.safeSendMessage("已拒绝id${data.id}的请求。")
+                }
+            }
+        }
+    }
+
+    @PointedBy("io.github.absdf15.chatbot.command.ChatCommand.handlePrompt", permission = Permission.BOT_OWNER)
+    suspend fun ActionParams.addPromptFile() {
+        if (messageEvent is FriendMessageEvent) {
+            messageEvent.apply {
+                Constants.PROMPT_FILES.keys.contains(rawCommand).takeIf { it }?.let {
+                    sender.safeSendMessage("模板存在，请重新输入!")
+                    Params.POINT_MAP.put(
+                        PointPair(sender.id, subject.id),
+                        "io.github.absdf15.chatbot.command.ChatCommand.handlePrompt" to 1
+                    )
+                    return
+                }
+                sender.safeSendMessage("好的,模板名字为:$rawCommand，开始处理...")
+
+                val fileName = "prompt-$rawCommand.txt"
+                val output = File(ChatPromptData.promptFolder, fileName)
+                output.writeBytes(fileName.toByteArray())
+                ChatPromptData.reload()
+                displayCharacterList()
+            }
+        }
+    }
 
     /**
      * 根据API回调结果回复
@@ -89,28 +197,25 @@ object ChatCommand {
     suspend fun ActionParams.chatMessageHistories() {
         messageEvent.apply {
             val messages = Constants.CHAT_MESSAGES[getSessionId()]
-            if (messages.isNullOrEmpty()){
+            if (messages.isNullOrEmpty()) {
                 sender.safeSendMessage("消息列表为空哦～请聊天后再来吧～")
                 return
             }
-            val forwardMessage = buildForwardMessage {
-                messages.forEachIndexed { index, it ->
-                    if (it.role == Role.USER)
-                        sender.id named sender.nameCardOrNick says it.content + "\n 消息序列: ${index + 1}"
-                    else
-                        bot.id named bot.nameCardOrNick says it.content + "\n 消息序列: ${index + 1}"
-                }
+            sender.safeSendMessage("下面是消息列表：")
+            buildMessageHistories(messages).forEach {
+                sender.safeSendMessage(it)
             }
-            sender.safeSendMessage(forwardMessage)
+
         }
     }
+
 
     @OptIn(DelicateCoroutinesApi::class)
     @Command("#导出聊天记录")
     suspend fun ActionParams.exportChatMessageHistories() {
         messageEvent.apply {
             val messages = Constants.CHAT_MESSAGES[getSessionId()]
-            if (messages.isNullOrEmpty()){
+            if (messages.isNullOrEmpty()) {
                 sender.safeSendMessage("消息列表为空哦～请聊天后再来吧～")
                 return
             }
@@ -125,10 +230,8 @@ object ChatCommand {
                     }
                 }
             }
-            val currentDateTime = LocalDateTime.now()
-            val formatter = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
-            val formattedDateTime = currentDateTime.format(formatter)
-            val fileName = "tmp/${formattedDateTime}_${sender.id}.txt"
+
+            val fileName = "tmp/${getCurrentDateTime()}_${sender.id}.txt"
             val file = resolveDataFile(fileName)
             file.writeBytes(text.toByteArray())
             if (messageEvent is GroupMessageEvent) {
@@ -194,6 +297,25 @@ object ChatCommand {
         messageEvent.apply {
             queryOrChat {
                 chat(isDirect = true)
+            }
+        }
+    }
+
+    @Command("#撤回")
+    suspend fun ActionParams.recallRequest() {
+        messageEvent.apply {
+            queryOrChat {
+                val messages = Constants.CHAT_MESSAGES[getSessionId()] ?: return@queryOrChat
+                if (messages.size >= 4) {
+                    val tmp = arrayListOf<ChatMessage>()
+                    tmp.addAll(messages.dropLast(2))
+                    messages.clear()
+                    messages.addAll(tmp)
+                    sender.safeSendMessage("撤回成功！下面是聊天记录：")
+                    buildMessageHistories(messages).forEach {
+                        sender.safeSendMessage(it)
+                    }
+                }
             }
         }
     }
@@ -272,7 +394,7 @@ object ChatCommand {
         }
     }
 
-    @Command("会话共享(?:开启|关闭)", MatchType.REGEX_MATCH)
+    @Command("会话共享(?:开启|关闭)", MatchType.REGEX_MATCH, Permission.BOT_ADMIN)
     suspend fun ActionParams.setSessionShared() {
         messageEvent.apply {
             val boolean = command.contains("开启")
@@ -379,4 +501,20 @@ object ChatCommand {
         }
     }
 
+    private suspend fun MessageEvent.buildMessageHistories(messages: ArrayList<ChatMessage>): ArrayList<ForwardMessage> {
+        // 拆分数组
+        val messageBatches = messages.chunked(100)
+        val forwardMessages = arrayListOf<ForwardMessage>()
+        messageBatches.forEach { batch ->
+            forwardMessages.add(buildForwardMessage {
+                batch.forEachIndexed { index, it ->
+                    if (it.role == Role.USER)
+                        sender.id named sender.nameCardOrNick says it.content + "\n 消息序列: ${index + 1}"
+                    else
+                        bot.id named bot.nameCardOrNick says it.content + "\n 消息序列: ${index + 1}"
+                }
+            })
+        }
+        return forwardMessages
+    }
 }
